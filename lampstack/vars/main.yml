@@ -1,0 +1,4 @@
+---
+# Variables for lampstack
+
+mysql_root_password: "password"

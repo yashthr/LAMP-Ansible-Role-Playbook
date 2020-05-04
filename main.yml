@@ -1,0 +1,7 @@
+---
+- name: Playbook to create LAMP Stack 
+  hosts: all
+  become: True
+  roles:
+    - lampstack
+

@@ -1,0 +1,174 @@
+---
+# tasks file for lampstack
+
+- name: Installing httpd
+  yum:
+   name: httpd
+   state: latest
+
+- name: Starting the service
+  service:
+   name: httpd
+   state: started
+
+- name: Copying Custom webpage to /var/www/html
+  copy:
+   src: index.html
+   dest: /var/www/html
+
+- name: Installing php
+  yum:
+   name: ["php", "php-mysqlnd", "php-pdo","php-gd" ,"php-mbstring"]
+   state: present
+
+- name: Copying info.php file to remote system
+  copy:
+   src: info.php
+   dest: /var/www/html/info.php
+  notify: restart apache
+
+- name: Installing mariadb
+  yum:
+   name:
+    - mariadb-server
+    - mariadb
+    - python3-PyMySQL
+   state: latest
+
+- name: Start mariadb service
+  service:
+   name: mariadb
+   enabled: true
+   state: started
+
+- name: Setting up mysql_root_password
+  mysql_user:
+   login_user: root
+   login_password: "{{ mysql_root_password }}"
+   user: root
+   check_implicit_admin: true
+   password: "{{ mysql_root_password }}"
+   host: localhost
+
+- name: Remove remote root
+  mysql_user:
+   check_implicit_admin: true
+   login_user: root
+   login_password: "{{ mysql_root_password }}"
+   user: root
+   host: "{{ ansible_fqdn }}"
+   state: absent
+
+- name: Creating a New Database
+  mysql_db:
+   login_user: root
+   login_password: "{{ mysql_root_password }}"
+   name: compufy
+   state: present
+
+- name: Creating yash user
+  mysql_user:
+   login_user: root
+   login_password: "{{ mysql_root_password }}"
+   name: yash
+   password: 12345
+   priv: '*.*:ALL'
+   state: present
+
+
+- name: Installing Wordpress
+  yum:
+   name:
+    - php-mysqlnd
+    - php-dom
+    - php-simplexml
+    - php-xml
+    - php-xmlreader
+    - php-curl
+    - php-exif
+    - php-ftp
+    - php-gd
+    - php-iconv
+    - php-json
+    - php-mbstring
+    - php-posix
+    - php-sockets
+    - php-tokenizer
+   state: present
+
+- name: Downloading wordpress.tar
+  get_url:
+   url: "https://wordpress.org/latest.tar.gz"
+   dest: /home/ansadmin/wordpress.tar.gz
+   mode: '0777'
+
+- name: Extracting wordpress.tar
+  command: "tar xzf /home/ansadmin/wordpress.tar.gz -C /var/www/html"
+
+- name: Change ownership to Apache:Apache
+  file:
+   path: /var/www/html/wordpress
+   state: directory
+   recurse: yes
+   owner: ansadmin
+   group: ansadmin
+
+- name: Copy sample config file to wp-config.php
+  command: "mv /var/www/html/wordpress/wp-config-sample.php /var/www/html/wordpress/wp-config.php"
+
+- name: Update Wordpress config file with DB credentials
+  lineinfile:
+   path: /var/www/html/wordpress/wp-config.php
+   regexp: "{{item.regexp}}"
+   line: "{{item.line}}"
+  with_items:
+    - {'regexp': "define\\( 'DB_NAME', '(.)+' \\);", 'line': "define( 'DB_NAME', 'compufy' );"}
+    - {'regexp': "define\\( 'DB_USER', '(.)+' \\);", 'line': "define( 'DB_USER', 'yash' );"}
+    - {'regexp': "define\\( 'DB_PASSWORD', '(.)+' \\);", 'line': "define( 'DB_PASSWORD', '12345' );"}
+
+- name: Installing phpmyadmin dependencies
+  yum:
+   name:
+    - php
+    - php-pdo
+    - php-pecl-zip
+    - php-json
+    - php-mbstring
+    - php-mysqlnd
+    - php-json
+    - php-mbstring
+    - wget
+    - unzip
+   state: present
+
+- name: Download phpmyadmin.tar
+  get_url:
+   url: https://files.phpmyadmin.net/phpMyAdmin/5.0.1/phpMyAdmin-5.0.1-all-languages.zip
+   dest: /home/ansadmin
+
+- name: Unarchive the file
+  unarchive:
+   src: /home/ansadmin/phpMyAdmin-5.0.1-all-languages.zip
+   dest: /home/ansadmin/ 
+   remote_src: yes
+
+- name: Move phpmyadmin to /usr/share/phpmyadmin
+  command: "mv phpMyAdmin-5.0.1-all-languages /usr/share/phpmyadmin"
+
+- name: Making tmp directory in /usr/shar/phpmyadmin/tmp
+  command: "mkdir /usr/share/phpmyadmin/tmp"
+
+- name: Changing apache:apache to phpmyadmin
+  command: "chown -R apache:apache /usr/share/phpmyadmin"
+
+- name: Adding permissions
+  command: "chmod 777 /usr/share/phpmyadmin/tmp"
+
+- name: Coping the phpmyadmin.conf to remote system
+  copy:
+   src: phpmyadmin.conf
+   dest: /etc/httpd/conf.d/phpmyadmin.conf
+   owner: ansadmin
+   group: ansadmin
+  notify: restart apache
+
